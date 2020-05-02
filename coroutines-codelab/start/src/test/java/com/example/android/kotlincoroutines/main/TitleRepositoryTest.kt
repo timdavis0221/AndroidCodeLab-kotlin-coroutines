@@ -17,6 +17,14 @@
 package com.example.android.kotlincoroutines.main
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import com.example.android.kotlincoroutines.fakes.MainNetworkCompletableFake
+import com.example.android.kotlincoroutines.fakes.MainNetworkFake
+import com.example.android.kotlincoroutines.fakes.TitleDaoFake
+import com.google.common.truth.Truth
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runBlockingTest
 import org.junit.Rule
 import org.junit.Test
 
@@ -25,14 +33,57 @@ class TitleRepositoryTest {
     @get:Rule
     val instantTaskExecutorRule = InstantTaskExecutorRule()
 
+    @ExperimentalCoroutinesApi
     @Test
-    fun whenRefreshTitleSuccess_insertsRows() {
-        // TODO: Write this test
+    fun whenRefreshTitleSuccess_insertsRows() = runBlockingTest {
+        val titleDao = TitleDaoFake("title")
+        val subject = TitleRepository(
+                MainNetworkFake("OK"),
+                titleDao
+        )
+        subject.refreshTitle()
+        // use the fakes provided to check that "OK" is inserted to the database by refreshTitle.
+        Truth.assertThat(titleDao.nextInsertedOrNull()).isEqualTo("OK")
+
+        /**
+          * launch starts a coroutine then immediately returns
+          * since this is asynchronous code
+          * this may be called *after* the test completes
+          *
+          * This test will sometimes fail
+          * The call to launch will return immediately and
+          * execute at the same time as the rest of the test case
+          */
+        /*GlobalScope.launch {
+
+            subject.refreshTitle()
+        }*/
+
+        /**
+         * test function returns immediately, and
+         * doesn't see the results of refreshTitle
+         */
     }
 
+    @ExperimentalCoroutinesApi
     @Test(expected = TitleRefreshError::class)
-    fun whenRefreshTitleTimeout_throws() {
+    fun whenRefreshTitleTimeout_throws() = runBlockingTest {
         // TODO: Write this test
-        throw TitleRefreshError("Remove this – made test pass in starter code", null)
+        val network = MainNetworkCompletableFake()
+        val subject = TitleRepository(
+                network,
+                TitleDaoFake("title")
+        )
+
+        launch {
+            subject.refreshTitle()
+        }
+
+        /**
+         * One of the features of runBlocking test is that it won't let you leak coroutines after the test completes.
+         * If there are any unfinished coroutines, like our launch coroutine,
+         * at the end of the test, it will fail the test.
+         */
+        advanceTimeBy(5_000)
     }
 }
