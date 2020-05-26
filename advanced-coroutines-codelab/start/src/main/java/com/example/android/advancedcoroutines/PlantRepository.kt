@@ -16,15 +16,15 @@
 
 package com.example.android.advancedcoroutines
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.liveData
-import androidx.lifecycle.map
+import androidx.lifecycle.*
 import com.example.android.advancedcoroutines.util.CacheOnSuccess
 import com.example.android.advancedcoroutines.utils.ComparablePair
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.nio.ByteOrder
+import java.util.*
 
 /**
  * Repository module for handling data operations.
@@ -55,6 +55,11 @@ class PlantRepository private constructor(
             ComparablePair(positionForItem, plant.name)
         }
     }
+
+    private suspend fun List<Plant>.applyMainSafeSort(customSortOrder: List<String>) =
+        withContext(defaultDispatcher) {
+            this@applyMainSafeSort.applySort(customSortOrder)
+        }
 
     /**
      * Fetch a list of [Plant]s from the database.
@@ -95,6 +100,15 @@ class PlantRepository private constructor(
             })
         }
 
+    fun getPlantsWithGrowZoneAdvanced(growZone: GrowZone) =
+        plantDao.getPlantsWithGrowZoneNumber(growZone.number)
+            .switchMap { plantList ->
+                liveData {
+                    val customSortOrder = plantsListSortOrderCache.getOrAwait()
+                    emit(plantList.applyMainSafeSort(customSortOrder))
+                }
+            }
+
     /**
      * Returns true if we should make a network request.
      */
@@ -119,7 +133,7 @@ class PlantRepository private constructor(
      * This function may decide to avoid making a network requests on every call based on a
      * cache-invalidation policy.
      */
-    suspend fun tryUpdateRecentPlantsForGrowZoneCache(growZoneNumber: GrowZone) {
+    private suspend fun tryUpdateRecentPlantsForGrowZoneCache(growZoneNumber: GrowZone) {
         if (shouldUpdatePlantsCache()) fetchPlantsForGrowZone(growZoneNumber)
     }
 
