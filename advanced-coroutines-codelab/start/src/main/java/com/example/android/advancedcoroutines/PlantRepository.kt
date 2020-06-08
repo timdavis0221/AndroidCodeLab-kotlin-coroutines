@@ -20,6 +20,8 @@ import androidx.lifecycle.*
 import com.example.android.advancedcoroutines.util.CacheOnSuccess
 import com.example.android.advancedcoroutines.utils.ComparablePair
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+
 /**
  * Repository module for handling data operations.
  *
@@ -74,6 +76,8 @@ class PlantRepository private constructor(
         })
     }
 
+    val plantsFlow: Flow<List<Plant>>
+        get() = plantDao.getPlantsFlow()
 
 
     /**
@@ -102,6 +106,10 @@ class PlantRepository private constructor(
                     emit(plantList.applyMainSafeSort(customSortOrder))
                 }
             }
+
+    fun getPlantsWithGrowZoneFlow(growZone: GrowZone): Flow<List<Plant>> {
+        return plantDao.getPlantsWithGrowZoneNumberFlow(growZone.number)
+    }
 
     /**
      * Returns true if we should make a network request.
