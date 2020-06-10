@@ -5,6 +5,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 
 /*fun <T> createFlow(query: Query, tables: List<Boolean>): Flow<T> =
     flow {
@@ -29,8 +31,15 @@ fun makeFlow() = flow {
     emit(3)
 }
 
+fun foo(): Sequence<Int> = sequence { // sequence builder
+    for (i in 1..3) {
+        yield(i) // yield next value
+        Thread.sleep(2500) // pretend we are computing it
+    }
+}
+
 @ExperimentalCoroutinesApi
-suspend fun main() {
+fun main() /*= runBlocking*/ {
     // collect as a consumer (terminal operator)
     // flow { ... } as a producer
     /*makeFlow().collect { value ->
@@ -38,12 +47,14 @@ suspend fun main() {
     }
     println("flow is completed")*/
 
-    val repeatableFlow = makeFlow().take(2)
-    println("first collection")
-    repeatableFlow.collect()
-    println("collecting again")
-    repeatableFlow.collect()
-    println("second collection completed")
+    foo().forEach { value -> println(value) }
+
+//    val repeatableFlow = makeFlow().take(2)
+//    println("first collection")
+//    repeatableFlow.collect()
+//    println("collecting again")
+//    repeatableFlow.collect()
+//    println("second collection completed")
 }
 
 

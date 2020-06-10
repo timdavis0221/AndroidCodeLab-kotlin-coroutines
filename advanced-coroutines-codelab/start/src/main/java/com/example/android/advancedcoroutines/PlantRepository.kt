@@ -20,7 +20,7 @@ import androidx.lifecycle.*
 import com.example.android.advancedcoroutines.util.CacheOnSuccess
 import com.example.android.advancedcoroutines.utils.ComparablePair
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.*
 
 /**
  * Repository module for handling data operations.
@@ -56,6 +56,21 @@ class PlantRepository private constructor(
             this@applyMainSafeSort.applySort(customSortOrder)
         }
 
+    private val customSortFlow = flow {
+        emit(plantsListSortOrderCache.getOrAwait())
+    }
+
+    @UseExperimental(FlowPreview::class)
+    private val customSortFlowSimplified =
+        plantsListSortOrderCache::getOrAwait.asFlow()
+        // The transform onStart will happen when an observer listens before other operators
+        // and it can emit placeholder values. So here we're emitting an empty list,
+        // delaying calling getOrAwait by 1500ms, then continuing the original flow.
+            /*.onStart {
+                emit(listOf())
+                delay(3500)
+            }*/
+
     /**
      * Fetch a list of [Plant]s from the database.
      */
@@ -76,8 +91,35 @@ class PlantRepository private constructor(
         })
     }
 
+    @ExperimentalCoroutinesApi
     val plantsFlow: Flow<List<Plant>>
         get() = plantDao.getPlantsFlow()
+            // When the result of customSortFlow is available,
+            // this will combine it with the latest value from
+            // the flow above.  Thus, as long as both `plants`
+            // and `sortOrder` are have an initial value (their
+            // flow has emitted at least one value), any change
+            // to either `plants` or `sortOrder`  will call
+            // `plants.applySort(sortOrder)`.
+
+            // Both flows will run in their own coroutine
+            // That means that while Room starts the network request, Retrofit can start the network query.
+            // Then, as soon as a result is available for both flows,
+            // it will call the combine lambda where we apply the loaded sort order to the loaded plants.
+            .combine(customSortFlowSimplified) { plants, sortOrder ->
+                plants.applySort(sortOrder)
+            }
+            // However, as our data set grows in size, the call to applySort may become slow enough to block the main thread.
+            // Flow offers a declarative API called flowOn to control which thread the flow runs on.
+
+            // The coroutine launched by flowOn is allowed to produce results faster than the caller consumes them,
+            // and it will buffer a large number of them by default.
+            .flowOn(defaultDispatcher)
+            // make a buffer of flowOn :
+            // a *buffer* to send results from the new coroutine to later calls. (sending the results to the UI)
+            // it modifies the buffer of flowOn to store only the last result.
+            // If another result comes in before the previous one is read, it gets overwritten.
+            .conflate()
 
 
     /**
