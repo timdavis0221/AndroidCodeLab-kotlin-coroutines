@@ -17,7 +17,11 @@
 package com.example.android.advancedcoroutines
 
 import androidx.lifecycle.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.ConflatedBroadcastChannel
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -66,8 +70,25 @@ class PlantListViewModel internal constructor(
         }
     }
 
-    val plantsUsingFlow: LiveData<List<Plant>>
-            = plantRepository.plantsFlow.asLiveData()
+    // A special kind of coroutine-based value holder that holds only the last value it was given
+    // It's a thread-safe concurrency primitive, so you can write to it from multiple threads at the same time
+    @ExperimentalCoroutinesApi
+    private val growZoneChannel = ConflatedBroadcastChannel<GrowZone>()
+
+    @ExperimentalCoroutinesApi
+    // Convert a ConflatedBroadcastChannel into a Flow
+    // This is an easy way to subscribe to changes in the ConflatedBroadcastChannel.
+    val plantsUsingFlow: LiveData<List<Plant>> = growZoneChannel.asFlow()
+        // This is exactly the same as switchMap from LiveData whenever the growZoneChannel changes its value
+        // Flow's flatMapLatest extensions allow you to switch between multiple flows.
+        // flatMapLatest return flow, LiveData.switchMap return LiveData
+        .flatMapLatest { growZone ->
+            if (growZone == NoGrowZone) {
+                plantRepository.plantsFlow
+            } else {
+                plantRepository.getPlantsWithGrowZoneFlow(growZone)
+            }
+        }.asLiveData() // finally, convert flow to LiveData since Fragment expects to expose a LiveData from ViewModel
 
     init {
         // When creating a new ViewModel, clear the grow zone and perform any related udpates
@@ -83,11 +104,15 @@ class PlantListViewModel internal constructor(
      * In the starter code version, this will also start a network request. After refactoring,
      * updating the grow zone will automatically kickoff a network request.
      */
+    @ExperimentalCoroutinesApi
     fun setGrowZoneNumber(num: Int) {
         growZone.value = GrowZone(num)
+        growZoneChannel.offer(GrowZone(num))
 
         // initial code version, will move during flow rewrite
-        launchDataLoad { plantRepository.tryUpdateRecentPlantsCache() }
+        launchDataLoad {
+            plantRepository.tryUpdateRecentPlantsForGrowZoneCache(GrowZone(num))
+        }
     }
 
     /**
@@ -98,9 +123,12 @@ class PlantListViewModel internal constructor(
      */
     fun clearGrowZoneNumber() {
         growZone.value = NoGrowZone
+        growZoneChannel.offer(NoGrowZone)
 
         // initial code version, will move during flow rewrite
-        launchDataLoad { plantRepository.tryUpdateRecentPlantsCache() }
+        launchDataLoad {
+            plantRepository.tryUpdateRecentPlantsCache()
+        }
     }
 
     /**

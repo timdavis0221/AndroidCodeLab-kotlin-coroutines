@@ -177,7 +177,7 @@ class PlantRepository private constructor(
      * This function may decide to avoid making a network requests on every call based on a
      * cache-invalidation policy.
      */
-    private suspend fun tryUpdateRecentPlantsForGrowZoneCache(growZoneNumber: GrowZone) {
+    suspend fun tryUpdateRecentPlantsForGrowZoneCache(growZoneNumber: GrowZone) {
         if (shouldUpdatePlantsCache()) fetchPlantsForGrowZone(growZoneNumber)
     }
 
