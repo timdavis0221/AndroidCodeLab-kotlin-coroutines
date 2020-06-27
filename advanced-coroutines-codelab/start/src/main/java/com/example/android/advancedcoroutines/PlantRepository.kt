@@ -151,6 +151,13 @@ class PlantRepository private constructor(
 
     fun getPlantsWithGrowZoneFlow(growZone: GrowZone): Flow<List<Plant>> {
         return plantDao.getPlantsWithGrowZoneNumberFlow(growZone.number)
+            // By relying on regular suspend functions to handle the async work,
+            // this map operation is main-safe even though it combines two async operations
+            .map { plantList ->
+                val sortOrderFromNetwork = plantsListSortOrderCache.getOrAwait()
+                val nextValue = plantList.applyMainSafeSort(sortOrderFromNetwork)
+                nextValue
+            }
     }
 
     /**
